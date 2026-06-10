@@ -1,43 +1,44 @@
+// src/routes/index.js
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
+// Importando as Telas
 import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
-// import GroupsScreen from '../screens/GroupsScreen';  // depois
-// import ProfileScreen from '../screens/ProfileScreen'; // depois
+import GroupsScreen from '../screens/GroupsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import CreateGroupScreen from '../screens/CreateGroupScreen';
+import GroupDetailsScreen from '../screens/GroupDetailsScreen';
+import ManageGoalsScreen from '../screens/ManageGoalsScreen'; // Crie um arquivo simples
+import EditProfileScreen from '../screens/EditProfileScreen'; // Crie um arquivo simples
+import RegisterScreen from '../screens/RegisterScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// 1. Configuração do Menu de Abas Inferior (Tab)
 function MainTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#0A0A0A',
-          borderTopColor: '#1C1C1E',
-        },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
-      }}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Grupos" component={HomeScreen} /> {/* placeholder */}
-      <Tab.Screen name="Perfil" component={HomeScreen} /> {/* placeholder */}
+    <Tab.Navigator screenOptions={{ headerShown: false }}>
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Feed' }} />
+      <Tab.Screen name="Grupos" component={GroupsScreen} options={{ title: 'Meus Grupos' }} />
+      <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: 'Meu Perfil' }} />
     </Tab.Navigator>
   );
 }
 
-export default function AppNavigator() {
+// 2. Fluxo Principal (Stack) que une a Autenticação e as telas internas
+export default function Routes() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Main" component={MainTabs} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Stack.Navigator screenOptions={{ headerShown: true }}>
+      <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+      <Stack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ title: 'Criar Novo Grupo' }} />
+      <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} options={{ title: 'Grupo' }} />
+      <Stack.Screen name="ManageGoals" component={ManageGoalsScreen} options={{ title: 'Configurar Metas' }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Editar Perfil' }} />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+    </Stack.Navigator>
   );
 }

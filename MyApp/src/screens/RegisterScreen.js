@@ -12,18 +12,33 @@ import {
 } from 'react-native';
 import { theme } from '../styles/theme';
 
-export default function LoginScreen({ navigation }) {
+export default function RegisterScreen({ navigation }) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleLogin = () => {
-    // Aqui futuramente você colocará a lógica de autenticação (Firebase, Supabase, API, etc.)
-    if (email.trim() === '' || password.trim() === '') {
+  const handleRegister = () => {
+    // Validações básicas
+    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       alert('Por favor, preencha todos os campos!');
       return;
     }
 
-    // Navega para o fluxo principal do app tirando a tela de login da pilha
+    if (password !== confirmPassword) {
+      alert('As senhas não coincidem!');
+      return;
+    }
+
+    if (password.length < 6) {
+      alert('A senha deve ter pelo menos 6 caracteres!');
+      return;
+    }
+
+    // Aqui entrará a integração com o seu backend futuramente
+    alert('Conta criada com sucesso! Bem-vindo à tribo.');
+    
+    // Navega para o app principal
     navigation.replace('MainTabs');
   };
 
@@ -38,20 +53,31 @@ export default function LoginScreen({ navigation }) {
         contentContainerStyle={styles.scrollContainer} 
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho / Logo */}
+        {/* Cabeçalho */}
         <View style={styles.headerContainer}>
           <Text style={styles.logo}>
-            PRODUCTIVITY<Text style={{ color: theme.colors.primary }}>RATS</Text>
+            CRIAR <Text style={{ color: theme.colors.primary }}>CONTA</Text>
           </Text>
-          <Text style={styles.subtitle}>No pain, no brain. Foque nas suas metas.</Text>
+          <Text style={styles.subtitle}>Entre para o bando e comece a pontuar.</Text>
         </View>
 
-        {/* Formulário */}
+        {/* Formulário de Cadastro */}
         <View style={styles.formContainer}>
+          
+          <Text style={styles.label}>Nome Completo</Text>
+          <TextInput 
+            style={styles.input}
+            placeholder="Ex: Shape Mental"
+            placeholderTextColor={theme.colors.textMuted}
+            autoCapitalize="words"
+            value={name}
+            onChangeText={setName}
+          />
+
           <Text style={styles.label}>E-mail</Text>
           <TextInput 
             style={styles.input}
-            placeholder="Digite seu e-mail"
+            placeholder="seu@email.com"
             placeholderTextColor={theme.colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -62,7 +88,7 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.label}>Senha</Text>
           <TextInput 
             style={styles.input}
-            placeholder="Digite sua senha"
+            placeholder="No mínimo 6 caracteres"
             placeholderTextColor={theme.colors.textMuted}
             secureTextEntry
             autoCapitalize="none"
@@ -70,26 +96,33 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setPassword}
           />
 
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
-          </TouchableOpacity>
+          <Text style={styles.label}>Confirmar Senha</Text>
+          <TextInput 
+            style={styles.input}
+            placeholder="Digite a senha novamente"
+            placeholderTextColor={theme.colors.textMuted}
+            secureTextEntry
+            autoCapitalize="none"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
 
-          {/* Botão de Entrar */}
+          {/* Botão de Cadastrar */}
           <TouchableOpacity 
             style={styles.button} 
-            onPress={handleLogin}
+            onPress={handleRegister}
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>BATER O PONTO</Text>
+            <Text style={styles.buttonText}>FORJAR PERFIL</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Rodapé de Cadastro */}
+        {/* Voltar para o Login */}
         <View style={styles.footerContainer}>
-          <Text style={styles.footerText}>Não possui conta? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.registerText}>Crie sua conta</Text>
-        </TouchableOpacity>
+          <Text style={styles.footerText}>Já tem uma conta? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.loginText}>Faça login</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -108,7 +141,7 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logo: { 
     color: '#FFF', 
@@ -135,7 +168,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
     marginTop: 12,
   },
   input: {
@@ -148,20 +181,12 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     fontSize: 16,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  forgotPasswordText: {
-    color: theme.colors.secondary,
-    fontSize: 12,
-  },
   button: { 
     backgroundColor: theme.colors.primary, 
     paddingVertical: 16, 
     borderRadius: 8, 
     alignItems: 'center',
+    marginTop: 24,
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -183,7 +208,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 14,
   },
-  registerText: {
+  loginText: {
     color: theme.colors.primary,
     fontSize: 14,
     fontWeight: 'bold',
