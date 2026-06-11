@@ -1,24 +1,86 @@
-// src/screens/EditProfileScreen.js
+// src/screens/EditProfileScreen.js (atualizado)
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
 
-export default function EditProfileScreen({ navigation }) {
-  // Estados para controlar os inputs do perfil
-  const [name, setName] = useState('João Silva');
-  const [username, setUsername] = useState('joaosilva');
-  const [avatarUrl, setAvatarUrl] = useState('');
+export default function EditProfileScreen({ navigation, route }) {
+  const { profile: existingProfile } = route.params || {};
+  
+  const [name, setName] = useState(existingProfile?.name || '');
+  const [username, setUsername] = useState(existingProfile?.username || '');
+  const [bio, setBio] = useState(existingProfile?.bio || '');
+  const [location, setLocation] = useState(existingProfile?.location || '');
+  const [website, setWebsite] = useState(existingProfile?.website || '');
+  const [avatarUrl, setAvatarUrl] = useState(existingProfile?.avatarUrl || '');
+  const [loading, setLoading] = useState(false);
 
-  const handleSaveChanges = () => {
-    if (!name.trim() || !username.trim()) {
-      Alert.alert('Erro', 'Os campos Nome e Username não podem ficar vazios.');
+  const handleSaveChanges = async () => {
+    if (!name.trim()) {
+      Alert.alert('Erro', 'O nome não pode ficar vazio.');
       return;
     }
-
-    // Aqui futuramente entraria a requisição para o banco de dados
-    Alert.alert('Sucesso 🎉', 'Perfil atualizado com sucesso!', [
-      { text: 'OK', onPress: () => navigation.goBack() }
-    ]);
+    
+    if (!username.trim()) {
+      Alert.alert('Erro', 'O nome de usuário não pode ficar vazio.');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const currentUser = await StorageService.getCurrentUser();
+      const allUsers = await StorageService.getUsers();
+      
+      // Verificar se o username já está em uso (exceto pelo próprio usuário)
+      const usernameTaken = allUsers.some(u => 
+        u.username === username.trim().toLowerCase() && u.id !== currentUser?.id
+      );
+      
+      if (usernameTaken) {
+        Alert.alert('Erro', 'Este nome de usuário já está em uso!');
+        setLoading(false);
+        return;
+      }
+      
+      // Atualizar perfil
+      const updatedProfile = {
+        ...existingProfile,
+        id: currentUser?.id,
+        name: name.trim(),
+        username: username.trim().toLowerCase(),
+        bio: bio.trim(),
+        location: location.trim(),
+        website: website.trim(),
+        avatarUrl: avatarUrl.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      await StorageService.saveUserProfile(updatedProfile);
+      
+      // Atualizar informações do usuário na lista de usuários
+      if (currentUser) {
+        const updatedUser = {
+          ...currentUser,
+          name: name.trim(),
+          username: username.trim().toLowerCase(),
+        };
+        await StorageService.saveUser(updatedUser);
+        await StorageService.setCurrentUser(updatedUser);
+      }
+      
+      Alert.alert(
+        'Sucesso 🎉', 
+        'Perfil atualizado com sucesso!',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+      
+    } catch (error) {
+      console.error('Erro ao salvar perfil:', error);
+      Alert.alert('Erro', 'Não foi possível salvar as alterações. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,29 +88,26 @@ export default function EditProfileScreen({ navigation }) {
       <Text style={styles.title}>Editar Perfil</Text>
       <Text style={styles.subtitle}>Mantenha seus dados atualizados para a sua tribo</Text>
 
-      {/* Preview do Avatar Atual */}
       <View style={styles.avatarPreviewContainer}>
         <View style={styles.avatarLarge}>
-          <Text style={styles.avatarText}>{name ? name[0] : '?'}</Text>
+          <Text style={styles.avatarText}>{name ? name[0].toUpperCase() : '?'}</Text>
         </View>
         <Text style={styles.avatarHelpText}>A alteração de foto usa uma URL de imagem</Text>
       </View>
 
-      {/* Input: Nome */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Nome Completo</Text>
         <TextInput
           style={styles.input}
-          placeholder="Seu nome"
+          placeholder="Seu nome completo"
           placeholderTextColor={theme.colors.textMuted}
           value={name}
           onChangeText={setName}
         />
       </View>
 
-      {/* Input: Username */}
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Nome de Usuário (Username)</Text>
+        <Text style={styles.label}>Nome de Usuário</Text>
         <View style={styles.usernameInputWrapper}>
           <Text style={styles.atSymbol}>@</Text>
           <TextInput
@@ -61,9 +120,46 @@ export default function EditProfileScreen({ navigation }) {
             onChangeText={setUsername}
           />
         </View>
+        <Text style={styles.helperText}>Seu identificador único no app</Text>
       </View>
 
-      {/* Input: URL da Foto */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Bio / Sobre você</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Conte um pouco sobre você..."
+          placeholderTextColor={theme.colors.textMuted}
+          multiline
+          numberOfLines={3}
+          value={bio}
+          onChangeText={setBio}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Localização</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex: São Paulo, SP"
+          placeholderTextColor={theme.colors.textMuted}
+          value={location}
+          onChangeText={setLocation}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Website / Portfolio</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="https://seusite.com"
+          placeholderTextColor={theme.colors.textMuted}
+          autoCapitalize="none"
+          keyboardType="url"
+          value={website}
+          onChangeText={setWebsite}
+        />
+      </View>
+
       <View style={styles.inputGroup}>
         <Text style={styles.label}>URL da Foto de Perfil</Text>
         <TextInput
@@ -75,15 +171,20 @@ export default function EditProfileScreen({ navigation }) {
           value={avatarUrl}
           onChangeText={setAvatarUrl}
         />
+        <Text style={styles.helperText}>Cole o link de uma imagem para usar como avatar</Text>
       </View>
 
-      {/* Botão de Salvar */}
       <TouchableOpacity 
-        style={styles.saveButton} 
+        style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
         onPress={handleSaveChanges}
         activeOpacity={0.8}
+        disabled={loading}
       >
-        <Text style={styles.saveButtonText}>Salvar Alterações</Text>
+        {loading ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <Text style={styles.saveButtonText}>Salvar Alterações</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -143,6 +244,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
   },
+  helperText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+  },
   input: {
     backgroundColor: theme.colors.surface,
     color: theme.colors.text,
@@ -152,6 +258,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
   },
   usernameInputWrapper: {
     flexDirection: 'row',
@@ -169,7 +279,7 @@ const styles = StyleSheet.create({
   },
   usernameInput: {
     flex: 1,
-    borderWidth: 0, // Remove a borda interna para usar a do wrapper
+    borderWidth: 0,
     paddingLeft: 4,
   },
   saveButton: { 
@@ -183,6 +293,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 4,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: { 
     color: '#000', 

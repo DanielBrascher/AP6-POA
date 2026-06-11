@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/screens/LoginScreen.js (atualizado)
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,23 +9,99 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ScrollView,
-  StatusBar
+  StatusBar,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // Aqui futuramente você colocará a lógica de autenticação (Firebase, Supabase, API, etc.)
+  useEffect(() => {
+    // Inicializar dados padrão quando o app abre
+    const initialize = async () => {
+      await StorageService.initializeDefaultData();
+    };
+    initialize();
+  }, []);
+
+  const handleLogin = async () => {
     if (email.trim() === '' || password.trim() === '') {
-      alert('Por favor, preencha todos os campos!');
+      Alert.alert('Erro', 'Por favor, preencha todos os campos!');
       return;
     }
 
-    // Navega para o fluxo principal do app tirando a tela de login da pilha
-    navigation.replace('MainTabs');
+    setLoading(true);
+
+    try {
+      // Buscar usuários salvos
+      let users = await StorageService.getUsers();
+      
+      // Verificar se o usuário existe
+      let user = users.find(u => u.email === email && u.password === password);
+      
+      if (!user) {
+        // Criar novo usuário para teste
+        const newUserId = Date.now().toString();
+        user = {
+          id: newUserId,
+          email,
+          password,
+          name: email.split('@')[0],
+          createdAt: new Date().toISOString(),
+        };
+        
+        await StorageService.saveUser(user);
+        
+        // Adicionar o novo usuário aos grupos padrão (Devs, Estudos, Hábitos)
+        const defaultGroups = await StorageService.getGroups();
+        
+        // Adicionar usuário a todos os grupos padrão como membro
+        for (const group of defaultGroups) {
+          await StorageService.addUserToGroup(newUserId, group.id, 'member');
+        }
+        
+        // Criar perfil para o usuário
+        const profile = {
+          id: newUserId,
+          name: user.name,
+          username: email.split('@')[0],
+          email: email,
+          totalXp: 0,
+          avatarUrl: '',
+          createdAt: new Date().toISOString(),
+          completedGoals: 0,
+        };
+        await StorageService.saveUserProfile(profile);
+      }
+      
+      // Salvar usuário atual
+      await StorageService.setCurrentUser(user);
+      
+      // Atualizar perfil se necessário
+      const profile = await StorageService.getUserProfile();
+      if (!profile.name || profile.name === 'Usuário') {
+        await StorageService.saveUserProfile({
+          ...profile,
+          name: user.name,
+          username: email.split('@')[0],
+          email: email,
+        });
+      }
+      
+      Alert.alert('Sucesso', `Bem-vindo, ${user.name}!`);
+      navigation.replace('MainTabs');
+      
+    } catch (error) {
+      console.error('Erro no login:', error);
+      Alert.alert('Erro', 'Não foi possível fazer login. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,7 +115,6 @@ export default function LoginScreen({ navigation }) {
         contentContainerStyle={styles.scrollContainer} 
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho / Logo */}
         <View style={styles.headerContainer}>
           <Text style={styles.logo}>
             PRODUCTIVITY<Text style={{ color: theme.colors.primary }}>RATS</Text>
@@ -46,7 +122,6 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.subtitle}>No pain, no brain. Foque nas suas metas.</Text>
         </View>
 
-        {/* Formulário */}
         <View style={styles.formContainer}>
           <Text style={styles.label}>E-mail</Text>
           <TextInput 
@@ -74,22 +149,25 @@ export default function LoginScreen({ navigation }) {
             <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
           </TouchableOpacity>
 
-          {/* Botão de Entrar */}
           <TouchableOpacity 
-            style={styles.button} 
+            style={[styles.button, loading && styles.buttonDisabled]} 
             onPress={handleLogin}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.buttonText}>BATER O PONTO</Text>
+            {loading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.buttonText}>BATER O PONTO</Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Rodapé de Cadastro */}
         <View style={styles.footerContainer}>
           <Text style={styles.footerText}>Não possui conta? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.registerText}>Crie sua conta</Text>
-        </TouchableOpacity>
+            <Text style={styles.registerText}>Crie sua conta</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -167,6 +245,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: { 
     color: '#FFF', 

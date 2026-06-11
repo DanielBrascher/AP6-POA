@@ -1,24 +1,51 @@
-// src/screens/CreateGroupScreen.js
+// src/screens/CreateGroupScreen.js (corrigido)
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
 
 export default function CreateGroupScreen({ navigation }) {
   const [groupName, setGroupName] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Ops!', 'O nome do grupo é obrigatório.');
       return;
     }
 
-    // Simulando a criação do grupo e navegando como "owner" (dono)
-    navigation.navigate('GroupDetails', { 
-      groupName: groupName,
-      role: 'owner' 
-    });
+    setLoading(true);
+
+    const currentUser = await StorageService.getCurrentUser();
+    if (!currentUser) {
+      Alert.alert('Erro', 'Usuário não encontrado. Faça login novamente.');
+      setLoading(false);
+      return;
+    }
+
+    const newGroup = await StorageService.createGroup(
+      {
+        name: groupName,
+        description: description,
+        imageUrl: imageUrl,
+      },
+      currentUser.id
+    );
+
+    if (newGroup) {
+      // Navegar diretamente para a tela do grupo criado
+      navigation.replace('GroupDetails', { 
+        groupId: newGroup.id, 
+        groupName: newGroup.name,
+        role: 'owner' 
+      });
+    } else {
+      Alert.alert('Erro', 'Não foi possível criar o grupo. Tente novamente.');
+    }
+    
+    setLoading(false);
   };
 
   return (
@@ -26,7 +53,6 @@ export default function CreateGroupScreen({ navigation }) {
       <Text style={styles.title}>Criar Novo Grupo</Text>
       <Text style={styles.subtitle}>Defina as regras e foque junto com seus amigos</Text>
 
-      {/* Input: Nome do Grupo */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Nome do Grupo</Text>
         <TextInput
@@ -38,7 +64,6 @@ export default function CreateGroupScreen({ navigation }) {
         />
       </View>
 
-      {/* Input: Descrição */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Foco / Descrição do Grupo</Text>
         <TextInput
@@ -52,7 +77,6 @@ export default function CreateGroupScreen({ navigation }) {
         />
       </View>
 
-      {/* Input: URL da Imagem de Capa */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>URL da Imagem do Grupo (Opcional)</Text>
         <TextInput
@@ -66,13 +90,15 @@ export default function CreateGroupScreen({ navigation }) {
         />
       </View>
 
-      {/* Botão Salvar */}
       <TouchableOpacity 
-        style={styles.saveButton} 
+        style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
         onPress={handleCreateGroup}
         activeOpacity={0.8}
+        disabled={loading}
       >
-        <Text style={styles.saveButtonText}>Criar e Ir para o Grupo 🚀</Text>
+        <Text style={styles.saveButtonText}>
+          {loading ? 'Criando...' : 'Criar e Ir para o Grupo 🚀'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -119,7 +145,7 @@ const styles = StyleSheet.create({
   },
   textArea: {
     height: 100,
-    textAlignVertical: 'top', // Garante que o texto comece no topo no Android
+    textAlignVertical: 'top',
   },
   saveButton: { 
     backgroundColor: theme.colors.primary, 
@@ -132,6 +158,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 4,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: { 
     color: '#000', 

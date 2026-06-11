@@ -1,66 +1,78 @@
-// src/screens/HomeScreen.js
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+// src/screens/HomeScreen.js (atualizado)
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, FlatList, RefreshControl } from 'react-native';
 import { theme } from '../styles/theme';
-
-// Dados fictícios para simular o banco de dados/API
-const MOCK_GROUPS = [
-  { id: 'all', name: 'Todos' },
-  { id: '1', name: 'Devs 🚀' },
-  { id: '2', name: 'Estudos 📚' },
-  { id: '3', name: 'Hábitos 🏃‍♂️' },
-];
-
-const MOCK_FEED = [
-  {
-    id: '1',
-    user: 'João',
-    action: "concluiu 'Estudar React Native'",
-    groupName: 'Devs 🚀',
-    groupId: '1',
-    xp: 50,
-    time: 'Há 5 min',
-  },
-  {
-    id: '2',
-    user: 'Ana',
-    action: "completou 'Leitura de 30 páginas'",
-    groupName: 'Estudos 📚',
-    groupId: '2',
-    xp: 30,
-    time: 'Há 20 min',
-  },
-  {
-    id: '3',
-    user: 'Carlos',
-    action: "pagou o 'Treino do Dia'",
-    groupName: 'Hábitos 🏃‍♂️',
-    groupId: '3',
-    xp: 40,
-    time: 'Há 1 hora',
-  },
-  {
-    id: '4',
-    user: 'Beatriz',
-    action: "codou por 2 horas seguidas",
-    groupName: 'Devs 🚀',
-    groupId: '1',
-    xp: 60,
-    time: 'Há 2 horas',
-  },
-];
+import StorageService from '../services/StorageService';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen({ navigation }) {
   const [selectedGroup, setSelectedGroup] = useState('all');
+  const [groups, setGroups] = useState([{ id: 'all', name: 'Todos' }]);
+  const [feed, setFeed] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Filtra o feed baseado no grupo selecionado no menu superior
+  const loadData = async () => {
+    const currentUser = await StorageService.getCurrentUser();
+    
+    if (currentUser) {
+      // Buscar grupos que o usuário participa
+      const userGroups = await StorageService.getUserGroupsDetails(currentUser.id);
+      
+      const groupOptions = [
+        { id: 'all', name: 'Todos' },
+        ...userGroups.map(g => ({ id: g.id, name: g.name }))
+      ];
+      setGroups(groupOptions);
+      
+      // Buscar feed
+      let feedData = await StorageService.getFeed();
+      
+      // Ordenar por timestamp (mais recente primeiro)
+      feedData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      // Formatar os dados do feed
+      const formattedFeed = feedData.map(item => ({
+        ...item,
+        time: formatTimeAgo(item.timestamp),
+      }));
+      
+      setFeed(formattedFeed);
+    }
+  };
+  
+  const formatTimeAgo = (timestamp) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffMs = now - time;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Agora mesmo';
+    if (diffMins < 60) return `Há ${diffMins} min`;
+    if (diffHours < 24) return `Há ${diffHours} h`;
+    return `Há ${diffDays} d`;
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  // Filtra o feed baseado no grupo selecionado
   const filteredFeed = selectedGroup === 'all' 
-    ? MOCK_FEED 
-    : MOCK_FEED.filter(item => item.groupId === selectedGroup);
+    ? feed 
+    : feed.filter(item => item.groupId === selectedGroup);
 
   return (
     <View style={styles.container}>
-      {/* Header fixo */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Feed Geral</Text>
         <Text style={styles.headerSubtitle}>Acompanhe a evolução da sua tribo</Text>
@@ -69,7 +81,7 @@ export default function HomeScreen({ navigation }) {
       {/* Menu Seletor de Grupos (Horizontal) */}
       <View style={styles.selectorContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectorScroll}>
-          {MOCK_GROUPS.map((group) => {
+          {groups.map((group) => {
             const isSelected = selectedGroup === group.id;
             return (
               <TouchableOpacity
@@ -92,15 +104,17 @@ export default function HomeScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.feedList}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
+        }
         ListEmptyComponent={
           <Text style={styles.emptyText}>Nenhuma atividade recente por aqui.</Text>
         }
         renderItem={({ item }) => (
           <View style={styles.feedCard}>
-            {/* Clique no Avatar leva para o Perfil */}
             <TouchableOpacity onPress={() => navigation.navigate('Perfil')}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.user[0]}</Text>
+                <Text style={styles.avatarText}>{item.user?.[0] || '?'}</Text>
               </View>
             </TouchableOpacity>
 
@@ -131,7 +145,7 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: 60, // Dá espaço para a barra de status do celular
+    paddingTop: 60,
     paddingBottom: theme.spacing.sm,
   },
   headerTitle: { 
@@ -169,7 +183,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   groupChipTextActive: {
-    color: '#000', // Texto preto no chip laranja destacado dá excelente contraste
+    color: '#000',
     fontWeight: 'bold',
   },
   feedList: {

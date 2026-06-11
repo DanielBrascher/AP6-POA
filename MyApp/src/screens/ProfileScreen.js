@@ -1,75 +1,181 @@
-// src/screens/ProfileScreen.js
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
+// src/screens/ProfileScreen.js (atualizado)
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function ProfileScreen({ navigation }) {
-  // Dados fictícios do perfil do usuário
-  const userProfile = {
-    name: 'João Silva',
-    username: '@joaosilva',
-    totalXp: 1250,
-    groupsCount: 3,
-    completedGoals: 42,
-    recentAchievements: [
-      { id: '1', title: 'Foco Total ⚡', desc: 'Completou 5 metas em um único dia' },
-      { id: '2', title: 'Rato de Código 💻', desc: 'Acumulou 500 XP no grupo Devs' },
-    ]
+  const [profile, setProfile] = useState(null);
+  const [userGroups, setUserGroups] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState({
+    totalXp: 0,
+    groupsCount: 0,
+    completedGoals: 0,
+  });
+
+  const loadProfile = async () => {
+    const currentUser = await StorageService.getCurrentUser();
+    
+    if (currentUser) {
+      // Carregar perfil
+      const userProfile = await StorageService.getUserProfile();
+      setProfile(userProfile);
+      
+      // Carregar grupos do usuário
+      const groups = await StorageService.getUserGroupsDetails(currentUser.id);
+      setUserGroups(groups);
+      
+      // Carregar conquistas do usuário
+      const allAchievements = [];
+      for (const group of groups) {
+        if (group.achievements) {
+          allAchievements.push(...group.achievements.map(ach => ({
+            ...ach,
+            groupName: group.name,
+          })));
+        }
+      }
+      
+      // Estatísticas
+      setStats({
+        totalXp: userProfile?.totalXp || 0,
+        groupsCount: groups.length,
+        completedGoals: userProfile?.completedGoals || 0,
+      });
+    }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
+  };
+
+  if (!profile) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.emptyText}>Carregando perfil...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
+      }
+    >
       
-      {/* Bloco do Avatar e Nome */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarLarge}>
-          <Text style={styles.avatarText}>{userProfile.name[0]}</Text>
+          {profile.avatarUrl ? (
+            // Aqui você pode adicionar uma Image component se quiser
+            <Text style={styles.avatarText}>{profile.name?.[0] || '?'}</Text>
+          ) : (
+            <Text style={styles.avatarText}>{profile.name?.[0] || '?'}</Text>
+          )}
         </View>
-        <Text style={styles.name}>{userProfile.name}</Text>
-        <Text style={styles.username}>{userProfile.username}</Text>
+        <Text style={styles.name}>{profile.name}</Text>
+        <Text style={styles.username}>@{profile.username}</Text>
+        {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
       </View>
 
-      {/* Grid de Estatísticas */}
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{userProfile.totalXp}</Text>
+          <Text style={styles.statValue}>{stats.totalXp}</Text>
           <Text style={styles.statLabel}>Total XP</Text>
         </View>
         <View style={[styles.statBox, styles.statBoxBorder]}>
-          <Text style={styles.statValue}>{userProfile.groupsCount}</Text>
+          <Text style={styles.statValue}>{stats.groupsCount}</Text>
           <Text style={styles.statLabel}>Tribos</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{userProfile.completedGoals}</Text>
+          <Text style={styles.statValue}>{stats.completedGoals}</Text>
           <Text style={styles.statLabel}>Metas Pagas</Text>
         </View>
       </View>
 
-      {/* Botão de Editar Perfil */}
       <TouchableOpacity 
         style={styles.editButton} 
-        onPress={() => navigation.navigate('EditProfile')}
+        onPress={() => navigation.navigate('EditProfile', { profile })}
         activeOpacity={0.8}
       >
         <Text style={styles.editButtonText}>Editar Perfil</Text>
       </TouchableOpacity>
 
-      {/* Seção de Conquistas */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Conquistas Recentes</Text>
-        
-        {userProfile.recentAchievements.map((badge) => (
-          <View key={badge.id} style={styles.badgeCard}>
-            <View style={styles.badgeIconContainer}>
-              <Text style={styles.badgeIcon}>🏆</Text>
+      {/* Seção de Grupos */}
+      {userGroups.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Minhas Tribos</Text>
+          
+          {userGroups.map((group) => (
+            <TouchableOpacity 
+              key={group.id} 
+              style={styles.groupCard}
+              onPress={() => navigation.navigate('GroupDetails', { 
+                groupId: group.id, 
+                groupName: group.name,
+                role: group.userRole 
+              })}
+            >
+              <View style={styles.groupCardContent}>
+                <Text style={styles.groupName}>{group.name}</Text>
+                <Text style={styles.groupRole}>
+                  {group.userRole === 'owner' ? '👑 Dono' : '🏃‍♂️ Membro'}
+                </Text>
+              </View>
+              <Text style={styles.arrow}>➔</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Seção de Informações Pessoais */}
+      {(profile.email || profile.location || profile.website) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Informações</Text>
+          
+          {profile.email && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>📧 E-mail:</Text>
+              <Text style={styles.infoValue}>{profile.email}</Text>
             </View>
-            <View style={styles.badgeTextContainer}>
-              <Text style={styles.badgeTitle}>{badge.title}</Text>
-              <Text style={styles.badgeDesc}>{badge.desc}</Text>
+          )}
+          
+          {profile.location && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>📍 Localização:</Text>
+              <Text style={styles.infoValue}>{profile.location}</Text>
             </View>
-          </View>
-        ))}
-      </View>
+          )}
+          
+          {profile.website && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>🌐 Website:</Text>
+              <Text style={styles.infoValue}>{profile.website}</Text>
+            </View>
+          )}
+          
+          {profile.createdAt && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>📅 Membro desde:</Text>
+              <Text style={styles.infoValue}>
+                {new Date(profile.createdAt).toLocaleDateString('pt-BR')}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
     </ScrollView>
   );
@@ -80,6 +186,11 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: theme.colors.background, 
   },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   contentContainer: {
     paddingBottom: 40,
     alignItems: 'center',
@@ -88,6 +199,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 40,
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   avatarLarge: { 
     width: 110, 
@@ -108,15 +220,21 @@ const styles = StyleSheet.create({
   name: { 
     color: theme.colors.text, 
     fontSize: 24, 
-    fontWeight: 'bold' 
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   username: {
-    color: theme.colors.textMuted,
+    color: theme.colors.primary,
     fontSize: 14,
     marginTop: 4,
   },
+  bio: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
   
-  // Container de Estatísticas (Estilo Dashboard)
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
@@ -140,7 +258,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: theme.colors.primary,
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
   },
   statLabel: {
@@ -166,10 +284,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Seção de Conquistas/Badges
   section: {
     width: '90%',
     alignItems: 'flex-start',
+    marginBottom: 24,
   },
   sectionTitle: {
     color: theme.colors.text,
@@ -177,7 +295,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
-  badgeCard: {
+  
+  groupCard: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
     padding: 14,
@@ -187,27 +306,51 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     width: '100%',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  badgeIconContainer: {
-    backgroundColor: theme.colors.background,
-    padding: 8,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  badgeIcon: {
-    fontSize: 20,
-  },
-  badgeTextContainer: {
+  groupCardContent: {
     flex: 1,
   },
-  badgeTitle: {
+  groupName: {
     color: theme.colors.text,
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
   },
-  badgeDesc: {
+  groupRole: {
     color: theme.colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+  },
+  
+  infoRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginBottom: 8,
+    width: '100%',
+  },
+  infoLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    width: 100,
+  },
+  infoValue: {
+    color: theme.colors.text,
+    fontSize: 14,
+    flex: 1,
+  },
+  
+  arrow: { 
+    color: theme.colors.primary,
+    fontSize: 18,
+    marginLeft: 10,
+  },
+  emptyText: {
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    fontSize: 16,
   },
 });

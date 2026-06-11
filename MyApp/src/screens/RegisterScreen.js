@@ -1,3 +1,4 @@
+// src/screens/RegisterScreen.js (atualizado)
 import React, { useState } from 'react';
 import { 
   StyleSheet, 
@@ -8,38 +9,112 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ScrollView,
-  StatusBar
+  StatusBar,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
 
 export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     // Validações básicas
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-      alert('Por favor, preencha todos os campos!');
+    if (!name.trim() || !email.trim() || !username.trim() || !password.trim() || !confirmPassword.trim()) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos!');
       return;
     }
 
     if (password !== confirmPassword) {
-      alert('As senhas não coincidem!');
+      Alert.alert('Erro', 'As senhas não coincidem!');
       return;
     }
 
     if (password.length < 6) {
-      alert('A senha deve ter pelo menos 6 caracteres!');
+      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres!');
       return;
     }
 
-    // Aqui entrará a integração com o seu backend futuramente
-    alert('Conta criada com sucesso! Bem-vindo à tribo.');
-    
-    // Navega para o app principal
-    navigation.replace('MainTabs');
+    setLoading(true);
+
+    try {
+      // Verificar se o e-mail já está em uso
+      const existingUsers = await StorageService.getUsers();
+      const emailExists = existingUsers.some(u => u.email === email);
+      
+      if (emailExists) {
+        Alert.alert('Erro', 'Este e-mail já está cadastrado!');
+        setLoading(false);
+        return;
+      }
+      
+      // Verificar se o username já está em uso
+      const usernameExists = existingUsers.some(u => u.username === username);
+      
+      if (usernameExists) {
+        Alert.alert('Erro', 'Este nome de usuário já está em uso!');
+        setLoading(false);
+        return;
+      }
+
+      // Criar novo usuário
+      const newUserId = Date.now().toString();
+      const newUser = {
+        id: newUserId,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        username: username.trim().toLowerCase(),
+        password: password,
+        createdAt: new Date().toISOString(),
+      };
+      
+      await StorageService.saveUser(newUser);
+      
+      // Criar perfil do usuário
+      const newProfile = {
+        id: newUserId,
+        name: name.trim(),
+        username: username.trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
+        totalXp: 0,
+        avatarUrl: '',
+        completedGoals: 0,
+        createdAt: new Date().toISOString(),
+        bio: '',
+        location: '',
+        website: '',
+      };
+      
+      await StorageService.saveUserProfile(newProfile);
+      
+      // Adicionar usuário a todos os grupos padrão
+      const defaultGroups = await StorageService.getGroups();
+      
+      for (const group of defaultGroups) {
+        await StorageService.addUserToGroup(newUserId, group.id, 'member');
+      }
+      
+      // Salvar usuário atual
+      await StorageService.setCurrentUser(newUser);
+      
+      Alert.alert(
+        'Sucesso!', 
+        `Bem-vindo, ${name}! Sua conta foi criada e você foi adicionado aos grupos padrão.`,
+        [{ text: 'OK', onPress: () => navigation.replace('MainTabs') }]
+      );
+      
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      Alert.alert('Erro', 'Não foi possível criar sua conta. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,7 +128,6 @@ export default function RegisterScreen({ navigation }) {
         contentContainerStyle={styles.scrollContainer} 
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho */}
         <View style={styles.headerContainer}>
           <Text style={styles.logo}>
             CRIAR <Text style={{ color: theme.colors.primary }}>CONTA</Text>
@@ -61,18 +135,29 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.subtitle}>Entre para o bando e comece a pontuar.</Text>
         </View>
 
-        {/* Formulário de Cadastro */}
         <View style={styles.formContainer}>
           
           <Text style={styles.label}>Nome Completo</Text>
           <TextInput 
             style={styles.input}
-            placeholder="Ex: Shape Mental"
+            placeholder="Ex: João Silva"
             placeholderTextColor={theme.colors.textMuted}
             autoCapitalize="words"
             value={name}
             onChangeText={setName}
           />
+
+          <Text style={styles.label}>Nome de Usuário</Text>
+          <TextInput 
+            style={styles.input}
+            placeholder="Ex: joaosilva"
+            placeholderTextColor={theme.colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={username}
+            onChangeText={setUsername}
+          />
+          <Text style={styles.helperText}>Seu identificador único no app</Text>
 
           <Text style={styles.label}>E-mail</Text>
           <TextInput 
@@ -107,17 +192,20 @@ export default function RegisterScreen({ navigation }) {
             onChangeText={setConfirmPassword}
           />
 
-          {/* Botão de Cadastrar */}
           <TouchableOpacity 
-            style={styles.button} 
+            style={[styles.button, loading && styles.buttonDisabled]} 
             onPress={handleRegister}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.buttonText}>FORJAR PERFIL</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.buttonText}>FORJAR PERFIL</Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Voltar para o Login */}
         <View style={styles.footerContainer}>
           <Text style={styles.footerText}>Já tem uma conta? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -171,6 +259,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 12,
   },
+  helperText: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: theme.colors.background,
     color: theme.colors.text,
@@ -192,6 +286,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: { 
     color: '#FFF', 

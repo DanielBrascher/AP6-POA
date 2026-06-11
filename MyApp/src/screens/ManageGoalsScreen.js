@@ -1,56 +1,125 @@
-// src/screens/ManageGoalsScreen.js
-import React, { useState } from 'react';
+// src/screens/ManageGoalsScreen.js (atualizado)
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Alert, ScrollView } from 'react-native';
 import { theme } from '../styles/theme';
+import StorageService from '../services/StorageService';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 
 export default function ManageGoalsScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('goals'); // 'goals' ou 'achievements'
-
-  // --- ESTADOS DAS METAS ---
-  const [goals, setGoals] = useState([
-    { id: '1', title: 'Codar 1h', xp: 50 },
-    { id: '2', title: 'Ler documentação', xp: 30 },
-  ]);
+  const route = useRoute();
+  const { groupId } = route.params || {};
+  
+  const [activeTab, setActiveTab] = useState('goals');
+  const [goals, setGoals] = useState([]);
+  const [achievements, setAchievements] = useState([]);
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newGoalXp, setNewGoalXp] = useState('');
-
-  // --- ESTADOS DAS CONQUISTAS ---
-  const [achievements, setAchievements] = useState([
-    { id: 'a1', title: 'Iniciante Ágil', desc: 'Completou a primeira meta', icon: '🐣' },
-  ]);
   const [newAchTitle, setNewAchTitle] = useState('');
   const [newAchDesc, setNewAchDesc] = useState('');
   const [newAchIcon, setNewAchIcon] = useState('');
 
-  // Funções de Metas
-  const handleAddGoal = () => {
-    if (!newGoalTitle.trim() || !newGoalXp.trim()) return Alert.alert('Erro', 'Preencha tudo.');
-    const newGoal = { id: Math.random().toString(), title: newGoalTitle, xp: parseInt(newGoalXp) };
-    setGoals([...goals, newGoal]);
-    setNewGoalTitle(''); setNewGoalXp('');
+  const loadData = async () => {
+    if (!groupId) return;
+    
+    const groups = await StorageService.getGroups();
+    const group = groups.find(g => g.id === groupId);
+    
+    if (group) {
+      setGoals(group.goals || []);
+      setAchievements(group.achievements || []);
+    }
   };
 
-  // Funções de Conquistas
-  const handleAddAchievement = () => {
-    if (!newAchTitle.trim() || !newAchDesc.trim()) return Alert.alert('Erro', 'Dê um nome e descrição à conquista.');
-    const newAch = { 
-        id: Math.random().toString(), 
-        title: newAchTitle, 
-        desc: newAchDesc, 
-        icon: newAchIcon || '🏆' 
-    };
-    setAchievements([...achievements, newAch]);
-    setNewAchTitle(''); setNewAchDesc(''); setNewAchIcon('');
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [groupId])
+  );
+
+  const handleAddGoal = async () => {
+    if (!newGoalTitle.trim() || !newGoalXp.trim()) {
+      Alert.alert('Erro', 'Preencha todos os campos.');
+      return;
+    }
+    
+    const newGoal = await StorageService.addGoalToGroup(groupId, {
+      title: newGoalTitle,
+      xp: newGoalXp,
+    });
+    
+    if (newGoal) {
+      setGoals([...goals, newGoal]);
+      setNewGoalTitle('');
+      setNewGoalXp('');
+      Alert.alert('Sucesso', 'Meta adicionada ao grupo!');
+    }
   };
 
-  const deleteItem = (id, type) => {
-    if (type === 'goal') setGoals(goals.filter(g => g.id !== id));
-    else setAchievements(achievements.filter(a => a.id !== id));
+  const handleAddAchievement = async () => {
+    if (!newAchTitle.trim() || !newAchDesc.trim()) {
+      Alert.alert('Erro', 'Preencha todos os campos.');
+      return;
+    }
+    
+    const newAchievement = await StorageService.addAchievementToGroup(groupId, {
+      title: newAchTitle,
+      description: newAchDesc,
+      icon: newAchIcon || '🏆',
+    });
+    
+    if (newAchievement) {
+      setAchievements([...achievements, newAchievement]);
+      setNewAchTitle('');
+      setNewAchDesc('');
+      setNewAchIcon('');
+      Alert.alert('Sucesso', 'Conquista adicionada ao grupo!');
+    }
+  };
+
+  const deleteGoal = async (goalId) => {
+    Alert.alert(
+      'Remover Meta',
+      'Tem certeza que deseja remover esta meta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await StorageService.removeGoalFromGroup(groupId, goalId);
+            if (success) {
+              setGoals(goals.filter(g => g.id !== goalId));
+              Alert.alert('Sucesso', 'Meta removida!');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const deleteAchievement = async (achievementId) => {
+    Alert.alert(
+      'Remover Conquista',
+      'Tem certeza que deseja remover esta conquista?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await StorageService.removeAchievementFromGroup(groupId, achievementId);
+            if (success) {
+              setAchievements(achievements.filter(a => a.id !== achievementId));
+              Alert.alert('Sucesso', 'Conquista removida!');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
     <View style={styles.container}>
-      {/* Abas de Gerenciamento */}
       <View style={styles.tabBar}>
         <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'goals' && styles.tabActive]} 
@@ -68,7 +137,6 @@ export default function ManageGoalsScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {activeTab === 'goals' ? (
-          /* --- SEÇÃO DE METAS --- */
           <View>
             <View style={styles.cardForm}>
               <Text style={styles.label}>Nova Meta Diária</Text>
@@ -100,14 +168,13 @@ export default function ManageGoalsScreen({ navigation }) {
                   <Text style={styles.itemTitle}>{item.title}</Text>
                   <Text style={styles.itemSub}>{item.xp} XP</Text>
                 </View>
-                <TouchableOpacity onPress={() => deleteItem(item.id, 'goal')}>
+                <TouchableOpacity onPress={() => deleteGoal(item.id)}>
                   <Text style={styles.deleteBtn}>Remover</Text>
                 </TouchableOpacity>
               </View>
             ))}
           </View>
         ) : (
-          /* --- SEÇÃO DE CONQUISTAS --- */
           <View>
             <View style={styles.cardForm}>
               <Text style={styles.label}>Nova Conquista do Grupo</Text>
@@ -145,10 +212,10 @@ export default function ManageGoalsScreen({ navigation }) {
                   <Text style={styles.achIcon}>{item.icon}</Text>
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.itemTitle}>{item.title}</Text>
-                    <Text style={[styles.itemSub, { width: 180 }]}>{item.desc}</Text>
+                    <Text style={[styles.itemSub, { width: 180 }]}>{item.description}</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => deleteItem(item.id, 'ach')}>
+                <TouchableOpacity onPress={() => deleteAchievement(item.id)}>
                   <Text style={styles.deleteBtn}>Remover</Text>
                 </TouchableOpacity>
               </View>

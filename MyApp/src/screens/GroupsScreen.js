@@ -1,25 +1,41 @@
 // src/screens/GroupsScreen.js
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
 import { theme } from '../styles/theme';
-
-// Dados fictícios simulando grupos onde o usuário é dono ou membro
-const MOCK_MY_GROUPS = [
-  { id: '1', name: 'Devs 🚀', role: 'owner', membersCount: 5 },
-  { id: '2', name: 'Estudos 📚', role: 'member', membersCount: 12 },
-  { id: '3', name: 'Hábitos 🏃‍♂️', role: 'member', membersCount: 8 },
-];
+import StorageService from '../services/StorageService';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function GroupsScreen({ navigation }) {
+  const [groups, setGroups] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadGroups = async () => {
+    const currentUser = await StorageService.getCurrentUser();
+    if (currentUser) {
+      const userGroups = await StorageService.getUserGroupsDetails(currentUser.id);
+      setGroups(userGroups);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGroups();
+    }, [])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadGroups();
+    setRefreshing(false);
+  };
+
   return (
     <View style={styles.container}>
-      {/* Header da Tela */}
       <View style={styles.headerContainer}>
         <Text style={styles.title}>Meus Grupos</Text>
         <Text style={styles.subtitle}>Gerencie ou entre em grupos de foco</Text>
       </View>
 
-      {/* Botão de Criar Grupo (Estilo Sólido/Destacado) */}
       <TouchableOpacity 
         style={styles.createButton} 
         onPress={() => navigation.navigate('CreateGroup')}
@@ -28,17 +44,19 @@ export default function GroupsScreen({ navigation }) {
         <Text style={styles.createButtonText}>+ Criar Novo Grupo</Text>
       </TouchableOpacity>
 
-      {/* Listagem de Grupos */}
       <FlatList 
-        data={MOCK_MY_GROUPS}
+        data={groups}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
+        }
         ListEmptyComponent={
           <Text style={styles.emptyText}>Você ainda não faz parte de nenhum grupo.</Text>
         }
         renderItem={({ item }) => {
-          const isOwner = item.role === 'owner';
+          const isOwner = item.userRole === 'owner';
           
           return (
             <TouchableOpacity 
@@ -47,20 +65,19 @@ export default function GroupsScreen({ navigation }) {
               onPress={() => navigation.navigate('GroupDetails', { 
                 groupId: item.id, 
                 groupName: item.name,
-                role: item.role 
+                role: item.userRole 
               })}
             >
               <View style={styles.cardInfo}>
                 <Text style={styles.groupName}>{item.name}</Text>
                 
                 <View style={styles.badgeRow}>
-                  {/* Tag dinâmica: Dono ou Membro */}
                   <View style={[styles.roleBadge, isOwner ? styles.badgeOwner : styles.badgeMember]}>
                     <Text style={[styles.roleBadgeText, isOwner && styles.roleBadgeTextOwner]}>
                       {isOwner ? 'Dono' : 'Membro'}
                     </Text>
                   </View>
-                  <Text style={styles.membersCount}>{item.membersCount} integrantes</Text>
+                  <Text style={styles.membersCount}>{item.members?.length || 0} integrantes</Text>
                 </View>
               </View>
 
